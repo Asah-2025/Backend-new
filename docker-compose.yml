@@ -1,0 +1,58 @@
+version: "3.8"
+
+services:
+  # 1. DATABASE CONTAINER
+  postgres_db:
+    image: postgres:15
+    container_name: maintenance_db_container
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mrg09876
+      POSTGRES_DB: maintenance_db
+    ports:
+      - "5432:5432"
+    volumes:
+      # Simpan data agar tidak hilang saat container mati
+      - pg_data:/var/lib/postgresql/data
+      # Otomatis jalankan script SQL saat pertama kali nyala
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # 2. CHATBOT SERVICE (PYTHON)
+  chatbot_service:
+    build: ./chatbot-service
+    container_name: chatbot_container
+    ports:
+      - "8000:8000"
+    environment:
+      # PENTING: Di dalam Docker, host DB bukan localhost, tapi nama servicenya
+      DB_HOST: postgres_db
+      DB_USER: postgres
+      DB_PASSWORD: mrg09876
+      DB_NAME: maintenance_db
+      # Masukkan API Key Groq di sini agar tidak perlu edit file
+      GROQ_API_KEY: ${GROQ_API_KEY}
+    depends_on:
+      - postgres_db
+
+  # 3. BACKEND NODE (HAPI)
+  backend_node:
+    build: ./backend-node
+    container_name: backend_container
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      HOST: 0.0.0.0
+      DB_HOST: postgres_db
+      DB_USER: postgres
+      DB_PASSWORD: mrg09876
+      DB_NAME: maintenance_db
+      JWT_SECRET: rahasia_super_aman
+      # PENTING: Node panggil Python pake nama container, bukan localhost
+      CHATBOT_SERVICE_URL: http://chatbot_service:8000
+    depends_on:
+      - postgres_db
+      - chatbot_service
+
+volumes:
+  pg_data:
